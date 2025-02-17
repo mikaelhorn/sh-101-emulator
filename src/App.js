@@ -1,25 +1,26 @@
-import logo from './logo.svg';
+import React, { useContext } from 'react';
+import { AudioContext } from './context/AudioContext';
+import SH101Emulator from './components/SH101Emulator';
+import AudioInitializer from './components/AudioInitializer';
 import './App.css';
 
-function App() {
+
+const App = () => {
+  const { isAudioInitialized, setIsAudioInitialized } = useContext(AudioContext);
+
+  const handleAudioInit = () => {
+    setIsAudioInitialized(true);
+  };
+
   return (
     <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+      {!isAudioInitialized ? (
+        <AudioInitializer onInitialized={handleAudioInit} />
+      ) : (
+        <SH101Emulator />
+      )}
     </div>
   );
-}
+};
 
 export default App;
