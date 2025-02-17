@@ -20,7 +20,7 @@ export const AudioProvider = ({ children }) => {
 
   // Audio state
   const [isAudioInitialized, setIsAudioInitialized] = useState(false);
-  const [masterVolume, setMasterVolume] = useState(0.75);
+  const [masterVolume, setMasterVolume] = useState(0.6); // Reduced from 0.75 to 0.6
   const [sequence, setSequence] = useState(initializeSequence);
   const [currentStep, setCurrentStep] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -61,9 +61,9 @@ export const AudioProvider = ({ children }) => {
   // VCO state
   const [waveform, setWaveform] = useState('sawtooth');
   const [pulseWidth, setPulseWidth] = useState(0.5);
+  const [mainOscLevel, setMainOscLevel] = useState(-12);
   const [subOscLevel, setSubOscLevel] = useState(-60);
   const [noiseLevel, setNoiseLevel] = useState(-60);
-  const [sourceMix, setSourceMix] = useState({ main: 1, sub: 0.5, noise: 0 });
 
   // Filter state
   const [filterCutoff, setFilterCutoff] = useState(20000);
@@ -221,9 +221,9 @@ export const AudioProvider = ({ children }) => {
     // VCO
     waveform, setWaveform,
     pulseWidth, setPulseWidth,
+    mainOscLevel, setMainOscLevel,
     subOscLevel, setSubOscLevel,
     noiseLevel, setNoiseLevel,
-    sourceMix, setSourceMix,
     // Filter
     filterCutoff, setFilterCutoff,
     filterResonance, setFilterResonance,

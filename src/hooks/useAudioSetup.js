@@ -9,6 +9,7 @@ export const useAudioSetup = () => {
     masterVolume,
     waveform,
     pulseWidth,
+    mainOscLevel,
     attack,
     decay,
     sustain,
@@ -22,7 +23,6 @@ export const useAudioSetup = () => {
     vcfModAmount,
     noiseLevel,
     subOscLevel,
-    sourceMix,
     filterEnvAmount,
     delayTime,
     delayFeedback,
@@ -94,55 +94,73 @@ export const useAudioSetup = () => {
         Q: filterResonance,
         rolloff: -24
       });
+      
+      // Set a lower base frequency for the filter when envelope amount is high
+      const baseFreq = filterEnvAmount > 0 ? Math.min(filterCutoff, 2000) : filterCutoff;
+      components.filter.frequency.value = baseFreq;
+
       // Connect filter to both dry path and delay
       components.filter.connect(components.delayMix.a);
       components.filter.connect(components.delay);
 
-      // Create mixer with reduced gain
-      components.mixer = new Tone.Gain(0.7);
+      // Create mixer with significantly reduced gain to prevent clipping
+      components.mixer = new Tone.Gain(0.2); // Reduced from 0.5 to 0.2
       components.mixer.connect(components.filter);
       
-      // Source gains with proper scaling
-      components.mainGain = new Tone.Gain(sourceMix.main * 0.8);
+      // Source gains with proper scaling and reduced levels
+      components.mainGain = new Tone.Gain(Math.min(0.6, mainOscLevel)); // Reduced from 0.8 to 0.6
       components.mainGain.connect(components.mixer);
       
-      components.subGain = new Tone.Gain(sourceMix.sub * 0.5);
+      components.subGain = new Tone.Gain(Math.min(0.4, subOscLevel)); // Reduced from 0.6 to 0.4
       components.subGain.connect(components.mixer);
       
-      components.noiseGain = new Tone.Gain(sourceMix.noise * 0.5);
+      components.noiseGain = new Tone.Gain(Math.min(0.4, noiseLevel)); // Added gain limiting
       components.noiseGain.connect(components.mixer);
 
-      // Create synth
+      // Create synth with proper envelope settings and reduced volume
       components.synth = new Tone.MonoSynth({
         oscillator: {
           type: waveform === 'pulse' ? 'pulse' : waveform,
           width: pulseWidth
         },
         envelope: {
-          attack,
-          decay,
-          sustain: sustain * 0.8,
-          release,
+          attack: attack,
+          decay: decay,
+          sustain: sustain,
+          release: release,
+          attackCurve: 'linear',
+          releaseCurve: 'exponential'
         },
         filter: {
           Q: 0,
           type: "lowpass",
           rolloff: -24
         },
-        portamento,
-        volume: -6
-      });
-      components.synth.connect(components.mainGain);
+        filterEnvelope: {
+          attack: attack,
+          decay: decay,
+          sustain: sustain,
+          release: release,
+          baseFrequency: 200,
+          octaves: 7,
+          attackCurve: 'linear',
+          releaseCurve: 'exponential'
+        },
+        portamento: 0,
+        volume: Math.min(-6, mainOscLevel) // Added volume limiting
+      }).connect(components.mainGain);
 
-      // Create filter envelope
+      // Create filter envelope that matches the amplitude envelope
       components.filterEnv = new Tone.Envelope({
         attack,
         decay,
         sustain,
         release,
+        releaseCurve: 'exponential'
       });
 
-      components.filterEnvScale = new Tone.Gain(filterEnvAmount * 5000);
+      // Increase filter envelope scaling for more dramatic effect
+      components.filterEnvScale = new Tone.Gain(filterEnvAmount * 10000); // Increased from 5000 to 10000
       components.filterEnv.connect(components.filterEnvScale);
       components.filterEnvScale.connect(components.filter.frequency);
 
@@ -164,16 +182,15 @@ export const useAudioSetup = () => {
       // Create sub oscillator
       components.subOsc = new Tone.Oscillator({
         type: 'square',
-        volume: Math.min(-12, Math.max(-40, subOscLevel))
-      });
-      components.subOsc.connect(components.subGain);
+        volume: subOscLevel
+      }).connect(components.mixer);
 
       // Create noise
       components.noise = new Tone.Noise({
         type: 'white',
-        volume: Math.min(-12, Math.max(-40, noiseLevel))
+        volume: noiseLevel
       });
-      components.noise.connect(components.noiseGain);
+      components.noise.connect(components.mixer);
 
       // Start continuous components
       components.lfo.start();
@@ -182,19 +199,21 @@ export const useAudioSetup = () => {
         components.noise.start();
       }
 
-      // Set up note triggering
+      // Set up note triggering with proper timing
       const originalTriggerAttack = components.synth.triggerAttack;
       const originalTriggerRelease = components.synth.triggerRelease;
 
       components.synth.triggerAttack = (note, time) => {
-        components.filterEnv.triggerAttack(time);
-        components.subOsc.frequency.setValueAtTime(Tone.Frequency(note).toFrequency() / 2, time);
-        return originalTriggerAttack.call(components.synth, note, time);
+        const now = time || Tone.now();
+        components.subOsc.frequency.setValueAtTime(Tone.Frequency(note).toFrequency() / 2, now);
+        components.filterEnv.triggerAttack(now); // Explicitly trigger filter envelope
+        return originalTriggerAttack.call(components.synth, note, now);
       };
 
       components.synth.triggerRelease = (time) => {
-        components.filterEnv.triggerRelease(time);
-        return originalTriggerRelease.call(components.synth, time);
+        const now = time || Tone.now();
+        components.filterEnv.triggerRelease(now);
+        return originalTriggerRelease.call(components.synth, now);
       };
 
       console.log('Audio components setup complete');
@@ -220,25 +239,50 @@ export const useAudioSetup = () => {
       components.synth.set({
         oscillator: { type: waveform === 'pulse' ? 'pulse' : waveform, width: pulseWidth },
         envelope: { attack, decay, sustain: sustain * 0.8, release },
-        portamento
+        portamento,
+        volume: Math.min(-6, mainOscLevel) // Added volume limiting
       });
       components.filter.frequency.value = filterCutoff;
       components.filter.Q.value = filterResonance;
-      components.filterEnvScale.gain.value = filterEnvAmount * 5000;
+      
+      // Dynamically adjust filter behavior based on envelope amount
+      const baseFreq = filterEnvAmount > 0 ? Math.min(filterCutoff, 2000) : filterCutoff;
+      components.filter.frequency.value = baseFreq;
+      
+      // Update filter envelope parameters
+      components.filterEnv.attack = attack;
+      components.filterEnv.decay = decay;
+      components.filterEnv.sustain = sustain;
+      components.filterEnv.release = release;
+      
+      components.filterEnvScale.gain.value = filterEnvAmount * 10000;
       components.vcoModScale.gain.value = vcoModAmount * 50;
       components.vcfModScale.gain.value = vcfModAmount * 5000;
-      if (components.noise) components.noise.volume.value = noiseLevel;
-      if (components.subOsc) components.subOsc.volume.value = subOscLevel;
+      if (components.noise) components.noise.volume.value = Math.min(0.4, noiseLevel);
+      if (components.subOsc) components.subOsc.volume.value = Math.min(0.4, subOscLevel);
       if (components.reverb) {
         components.reverb.decay = reverbDecay;
         components.reverb.preDelay = reverbPreDelay;
         components.reverb.wet.value = reverbMix;
       }
+
+      // Update sub oscillator
+      if (components.subOsc && components.subGain) {
+        components.subOsc.volume.value = Math.min(0.4, subOscLevel);
+        components.subGain.gain.value = Math.min(0.4, subOscLevel);
+      }
+
+      // Update noise
+      if (components.noise && components.noiseGain) {
+        components.noise.volume.value = Math.min(0.4, noiseLevel);
+        components.noiseGain.gain.value = Math.min(0.4, noiseLevel);
+      }
+
     } catch (error) {
       console.error('Error updating audio parameters:', error);
     }
   }, [
-    isAudioInitialized, masterVolume, waveform, pulseWidth, attack, decay, sustain, release,
+    isAudioInitialized, masterVolume, waveform, pulseWidth, mainOscLevel, attack, decay, sustain, release,
     filterCutoff, filterResonance, filterEnvAmount, vcoModAmount, vcfModAmount,
     noiseLevel, subOscLevel, reverbDecay, reverbPreDelay, reverbMix
   ]);

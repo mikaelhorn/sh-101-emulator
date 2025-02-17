@@ -7,10 +7,12 @@ const VcoSection = () => {
     setWaveform,
     pulseWidth,
     setPulseWidth,
+    subOscLevel,
+    setSubOscLevel,
     noiseLevel,
     setNoiseLevel,
-    sourceMix,
-    setSourceMix,
+    mainOscLevel,
+    setMainOscLevel,
     formatValue,
   } = useContext(AudioContext);
 
@@ -43,47 +45,42 @@ const VcoSection = () => {
           </div>
         )}
         <div className="control-item">
-          <label>MIXER</label>
-          <div className="mixer-controls">
-            <div>
-              <label>VCO</label>
-              <div className="slider-wrapper">
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value={sourceMix.main}
-                  onChange={(e) => setSourceMix({ ...sourceMix, main: parseFloat(e.target.value) })}
-                />
-              </div>
-            </div>
-            <div>
-              <label>SUB</label>
-              <div className="slider-wrapper">
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value={sourceMix.sub}
-                  onChange={(e) => setSourceMix({ ...sourceMix, sub: parseFloat(e.target.value) })}
-                />
-              </div>
-            </div>
-            <div>
-              <label>NOISE</label>
-              <div className="slider-wrapper">
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value={sourceMix.noise}
-                  onChange={(e) => setSourceMix({ ...sourceMix, noise: parseFloat(e.target.value) })}
-                />
-              </div>
-            </div>
+          <label>MAIN OSC</label>
+          <div className="value-display">{formatValue(mainOscLevel, 'level')}</div>
+          <div className="slider-wrapper">
+            <input
+              type="range"
+              min="-60"
+              max="0"
+              value={mainOscLevel}
+              onChange={(e) => setMainOscLevel(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="control-item">
+          <label>SUB OSC</label>
+          <div className="value-display">{formatValue(subOscLevel, 'level')}</div>
+          <div className="slider-wrapper">
+            <input
+              type="range"
+              min="-60"
+              max="0"
+              value={subOscLevel}
+              onChange={(e) => setSubOscLevel(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="control-item">
+          <label>NOISE</label>
+          <div className="value-display">{formatValue(noiseLevel, 'level')}</div>
+          <div className="slider-wrapper">
+            <input
+              type="range"
+              min="-60"
+              max="0"
+              value={noiseLevel}
+              onChange={(e) => setNoiseLevel(e.target.value)}
+            />
           </div>
         </div>
       </div>

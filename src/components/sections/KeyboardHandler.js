@@ -1,6 +1,7 @@
 import React, { useContext, useEffect, useState, useMemo } from 'react';
 import { AudioContext } from '../../context/AudioContext';
 import * as Tone from 'tone';
+import './KeyboardHandler.css';
 
 const KeyboardHandler = () => {
   const { audioComponents, isAudioInitialized } = useContext(AudioContext);
@@ -129,12 +130,63 @@ const KeyboardHandler = () => {
       };
     });
 
+    const handleTouchStart = (e, note) => {
+      e.preventDefault(); // Prevent double-firing on mobile
+      if (!isAudioInitialized) return;
+      
+      try {
+        const { synth } = audioComponents.current;
+        if (!synth) {
+          console.error('Synth not initialized');
+          return;
+        }
+
+        synth.triggerAttack(note, Tone.now());
+        setCurrentNote(note);
+      } catch (error) {
+        console.error('Error triggering note:', error);
+      }
+    };
+
+    const handleTouchEnd = (e, note) => {
+      e.preventDefault();
+      if (!isAudioInitialized || note !== currentNote) return;
+
+      try {
+        const { synth } = audioComponents.current;
+        if (!synth) {
+          console.error('Synth not initialized');
+          return;
+        }
+
+        synth.triggerRelease(Tone.now());
+        setCurrentNote(null);
+      } catch (error) {
+        console.error('Error releasing note:', error);
+      }
+    };
+
+    const handleMouseDown = (e, note) => {
+      e.preventDefault();
+      handleTouchStart(e, note);
+    };
+
+    const handleMouseUp = (e, note) => {
+      e.preventDefault();
+      handleTouchEnd(e, note);
+    };
+
     return (
       <div className="keyboard-display">
         {keys.map((key) => (
           <div
             key={key.note}
             className={`key ${key.type} ${currentNote === key.note ? 'active' : ''}`}
+            onTouchStart={(e) => handleTouchStart(e, key.note)}
+            onTouchEnd={(e) => handleTouchEnd(e, key.note)}
+            onMouseDown={(e) => handleMouseDown(e, key.note)}
+            onMouseUp={(e) => handleMouseUp(e, key.note)}
+            onMouseLeave={(e) => handleMouseUp(e, key.note)}
           >
             {key.key}
           </div>
@@ -144,9 +196,7 @@ const KeyboardHandler = () => {
   };
 
   return (
-    <div className="keyboard-info">
-      <div>Use A-K keys to play notes (A = C4, K = C5)</div>
-      <div>Press Z/X to shift octave down/up (Current octave: {octaveOffset > 0 ? '+' : ''}{octaveOffset})</div>
+    <div className="keyboard-container">
       {renderKeyboard()}
     </div>
   );

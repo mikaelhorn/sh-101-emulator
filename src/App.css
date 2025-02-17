@@ -2,20 +2,23 @@
   box-sizing: border-box;
 }
 
+.audio-initializer {
+  text-align: center;
+}
+
 .App {
-  width: 100vw;
-  height: 100vh;
+  min-height: 100%;
+  width: 100%;
   background-color: #303030;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  position: fixed;
+  flex-direction: column;
+  position: absolute;
   top: 0;
   left: 0;
-  touch-action: none;
-  -webkit-user-select: none;
-  user-select: none;
+  right: 0;
+  bottom: 0;
+  overflow-y: scroll;
+  -webkit-overflow-scrolling: touch;
 }
 
 .App-logo {
@@ -54,49 +57,34 @@
 }
 
 .sh101-emulator {
+  flex: 1;
   width: 95vw;
-  height: 95vh;
+  margin: 10px auto 190px auto;
   background: #1a1a1a;
-  padding: 20px;
+  padding: 1rem;
   display: grid;
   grid-template-columns: 1fr;
   gap: 15px;
   border-radius: 15px;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-.sh101-emulator::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 8px;
-  background: #ccc;
-  border-radius: 15px 15px 0 0;
 }
 
 .control-section {
   background: #1a1a1a;
   border-radius: 8px;
   padding: 15px;
-  border: 2px solid #666;
+  border: 1px solid #333;
   position: relative;
-  box-shadow: 
-    inset 0 1px 1px rgba(255, 255, 255, 0.1),
-    0 1px 3px rgba(0, 0, 0, 0.2);
     width:-webkit-fill-available;
 }
 
 .control-section h3 {
   color: #fff;
-  font-size: 0.9rem;
-  margin: 0 0 15px 0;
+  font-size: 0.8rem;
+  margin: 0 0 1rem 0;
   text-transform: uppercase;
   text-align: left;
-  border-bottom: 2px solid #ccc;
-  padding-bottom: 5px;
+  border-bottom: 2px solid #333;
+  padding-bottom: 0.5rem;
 }
 
 .control-group {
@@ -104,6 +92,7 @@
   flex-direction: row;
   gap: 20px;
   align-items: center;
+  justify-content: space-around;
 }
 
 .mixer-controls {
@@ -111,7 +100,6 @@
   flex-direction: row;
   gap: 10px;
   padding: 10px;
-  background: rgba(0, 0, 0, 0.2);
   border-radius: 4px;
 }
 
@@ -225,18 +213,19 @@ select {
 }
 
 button {
-  background-color: #4299e1;
-  color: white;
+  background-color: #fff;
+  color: #1a1a1a;
   border: none;
   border-radius: 4px;
   padding: 12px 24px;
-  font-size: 16px;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
   transition: background-color 0.2s;
 }
 
 button:hover {
-  background-color: #3182ce;
+  opacity:0.9;
 }
 
 button.play-button {
@@ -292,7 +281,6 @@ button.play-button:active {
   }
 
   .sh101-emulator {
-    grid-template-columns: repeat(2, 1fr);
     gap: 10px;
     padding: 15px;
   }
@@ -326,17 +314,6 @@ button.play-button:active {
   }
 }
 
-.keyboard-info {
-  display: none!important;
-  grid-column: 1 / -1;
-  text-align: center;
-  padding: 10px;
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 4px;
-  margin-top: 20px;
-  font-size: 0.8rem;
-  color: #555;
-}
 
 /* Add retro LED font */
 @font-face {
@@ -346,56 +323,8 @@ button.play-button:active {
        url('//db.onlinewebfonts.com/t/8e22783d707ad140bffe18b2a3812529.woff') format('woff');
 }
 
-.keyboard-info {
-  grid-column: 1 / -1;
-  text-align: center;
-  padding: 10px;
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 4px;
-  margin-top: 20px;
-  font-size: 0.8rem;
-  color: #ddd;
-}
 
-.keyboard-display {
-  display: flex;
-  gap: 2px;
-  justify-content: center;
-  margin-top: 10px;
-}
 
-.key {
-  width: 30px;
-  height: 40px;
-  background: #ddd;
-  border: 1px solid #666;
-  border-radius: 0 0 3px 3px;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding-bottom: 5px;
-  font-size: 0.7rem;
-  color: #333;
-  position: relative;
-}
-
-.key.black {
-  background: #333;
-  color: #ddd;
-  height: 30px;
-  width: 20px;
-  margin: 0 -10px;
-  z-index: 1;
-}
-
-.key.active {
-  background: #ff0033;
-  color: white;
-}
-
-.key.black.active {
-  background: #cc0033;
-}
 
 .audio-loading,
 .audio-error {
@@ -496,20 +425,13 @@ button.play-button:active {
   color: #cccccc;
 }
 
-.keyboard-info {
-  grid-column: 1 / -1;
-  background: rgba(0, 0, 0, 0.2);
-  padding: 20px;
-  border-radius: 8px;
-  margin-top: 20px;
-}
-
 .keyboard-display {
   display: flex;
+  background: rgba(0, 0, 0, 0.2);
+
   justify-content: center;
   align-items: flex-start;
-  margin-top: 15px;
-  height: 120px;
+  margin-top: 0;
   position: relative;
 }
 
@@ -518,7 +440,6 @@ button.play-button:active {
   background: rgba(0, 0, 0, 0.2);
   padding: 10px;
   border-radius: 8px;
-  margin-bottom: 20px;
 }
 
 .visualizer canvas {
@@ -526,4 +447,13 @@ button.play-button:active {
   height: 100px;
   border-radius: 4px;
   background-color: #222;
+}
+
+
+body {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  height: 100%;
+  position: relative;
 }

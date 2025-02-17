@@ -13,8 +13,10 @@ const AudioInitializer = ({ onInitialized }) => {
       const context = Tone.getContext();
       await context.resume();
       
+      // Wait for the context to be fully running
       if (context.state === 'running') {
         console.log('Audio context is running');
+        await new Promise(resolve => setTimeout(resolve, 100)); // Give context time to stabilize
         onInitialized();
       } else {
         throw new Error('Could not start audio context');
@@ -36,10 +38,9 @@ const AudioInitializer = ({ onInitialized }) => {
 
   return (
     <div className="audio-initializer">
-      <button onClick={handleInitClick} className="start-button">
-        Start Synthesizer
-      </button>
-      <p>Click to activate audio synthesis</p>
+      <h2>Welcome to SH-101 Emulator</h2>
+      <p>Click the button below to start audio</p>
+      <button onClick={handleInitClick}>Initialize Audio</button>
     </div>
   );
 };

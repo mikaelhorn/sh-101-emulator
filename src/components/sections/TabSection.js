@@ -14,7 +14,7 @@ const TabSection = () => {
 
   const tabs = [
     {
-      name: 'SEQ/PITCH',
+      name: 'SEQ',
       content: (
         <>
           <SequencerSection />
@@ -41,11 +41,12 @@ const TabSection = () => {
       )
     },
     {
-      name: 'MASTER/FX',
+      name: 'FX',
       content: (
         <>
+        <TapeDelaySection />
           <MasterSection />
-          <TapeDelaySection />
+          
         </>
       )
     }

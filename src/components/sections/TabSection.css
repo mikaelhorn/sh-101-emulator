@@ -36,10 +36,19 @@
 
 .tab-content {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   gap: 1rem;
   justify-content: space-between;
 }
+
+@media (min-width: 640px) {
+    .tab-content {
+        flex-direction: row;
+    }
+}
+
+
+
 
 @media (max-width: 768px) {
   .tab-buttons {
@@ -51,3 +60,4 @@
     font-size: 0.8em;
   }
 }
+
