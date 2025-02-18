@@ -1,4 +1,4 @@
-import React, { createContext, useRef, useState, useEffect } from 'react';
+import React, { createContext, useRef, useState, useEffect, useCallback } from 'react';
 import * as Tone from 'tone';
 
 export const AudioContext = createContext();
@@ -39,14 +39,17 @@ export const AudioProvider = ({ children }) => {
   const [reverbMix, setReverbMix] = useState(0.3);
 
   useEffect(() => {
+    const currentComponents = audioComponents.current;
     console.log('AudioProvider rendered, isAudioInitialized:', isAudioInitialized);
+    
     return () => {
-      // Clean up any audio components when the provider unmounts
-      Object.values(audioComponents.current).forEach(component => {
-        if (component?.dispose) {
-          component.dispose();
-        }
-      });
+      if (currentComponents) {
+        Object.values(currentComponents).forEach(component => {
+          if (component?.dispose) {
+            component.dispose();
+          }
+        });
+      }
     };
   }, [isAudioInitialized]);
 
@@ -101,19 +104,18 @@ export const AudioProvider = ({ children }) => {
     }
   };
 
-  // Add transport control to context
-  const startTransport = () => {
+  // Wrap transport controls in useCallback
+  const startTransport = useCallback(() => {
     if (!sequenceEvent.current && Tone.Transport) {
       const events = Array(16).fill(null).map((_, i) => i);
+      const components = audioComponents.current;
       
       sequenceEvent.current = new Tone.Sequence(
         (time, step) => {
           setCurrentStep(step);
           
-          const { synth, subOsc } = audioComponents.current;
-          if (!synth || !subOsc) return;
+          if (!components?.synth || !components?.subOsc) return;
 
-          // Play notes for each active row
           Object.entries(sequence).forEach(([noteKey, steps]) => {
             if (!steps?.[step]) return;
             
@@ -121,11 +123,9 @@ export const AudioProvider = ({ children }) => {
             const baseNote = isHighOctave ? noteKey.replace('_high', '') : noteKey;
             const note = isHighOctave ? Tone.Frequency(baseNote).transpose(12) : baseNote;
             
-            // Set sub oscillator frequency one octave below
             const subFreq = Tone.Frequency(note).transpose(-1).toFrequency();
-            subOsc.frequency.setValueAtTime(subFreq, time);
-            // Trigger main synth with envelope
-            synth.triggerAttackRelease(note, '32n', time);
+            components.subOsc.frequency.setValueAtTime(subFreq, time);
+            components.synth.triggerAttackRelease(note, '32n', time);
           });
         },
         events,
@@ -134,9 +134,9 @@ export const AudioProvider = ({ children }) => {
 
       Tone.Transport.start();
     }
-  };
+  }, [sequence]);
 
-  const stopTransport = () => {
+  const stopTransport = useCallback(() => {
     if (Tone.Transport) {
       Tone.Transport.stop();
       setCurrentStep(-1);
@@ -145,17 +145,15 @@ export const AudioProvider = ({ children }) => {
         sequenceEvent.current = null;
       }
     }
-  };
+  }, []);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        // Pause audio when tab is hidden
         if (sequenceEvent.current) {
           Tone.Transport.pause();
         }
       } else if (isPlaying) {
-        // Resume audio when tab is visible again and was playing
         Tone.Transport.start();
       }
     };
@@ -178,22 +176,27 @@ export const AudioProvider = ({ children }) => {
     } else {
       stopTransport();
     }
-  }, [isPlaying, sequence]);
+  }, [isPlaying, sequence, startTransport, stopTransport]);
 
-  // Clean up audio resources when component unmounts
+  // Merge cleanup effects into one
   useEffect(() => {
+    const currentComponents = audioComponents.current;
+    const currentSequence = sequenceEvent.current;
+    
     return () => {
-      if (sequenceEvent.current) {
-        sequenceEvent.current.dispose();
+      if (currentComponents) {
+        Object.values(currentComponents).forEach(component => {
+          if (component?.dispose) {
+            component.dispose();
+          }
+        });
+      }
+      if (currentSequence) {
+        currentSequence.dispose();
       }
       if (Tone.Transport) {
         Tone.Transport.stop();
       }
-      Object.values(audioComponents.current).forEach(component => {
-        if (component?.dispose) {
-          component.dispose();
-        }
-      });
     };
   }, []);
 

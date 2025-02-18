@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState, useMemo } from 'react';
+import React, { useContext, useEffect, useState, useMemo, useCallback } from 'react';
 import { AudioContext } from '../../context/AudioContext';
 import * as Tone from 'tone';
 import './KeyboardHandler.css';
@@ -24,30 +24,54 @@ const KeyboardHandler = () => {
     'k': 'C5',
   }), []);
 
-  const getSubFrequency = (note) => {
+  const getSubFrequency = useCallback((note) => {
     return Tone.Frequency(note).toFrequency() / 2;
-  };
+  }, []);
 
-  const adjustNoteForOctave = (note) => {
+  const adjustNoteForOctave = useMemo(() => (note) => {
     if (!note) return note;
     const [pitch, octave] = note.split(/(\d+)/);
     return `${pitch}${parseInt(octave) + octaveOffset}`;
-  };
+  }, [octaveOffset]);
+
+  const handleTouchStart = useCallback((e, note) => {
+    e.preventDefault();
+    const components = audioComponents.current;
+    if (!isAudioInitialized || !components?.synth) return;
+    
+    try {
+      components.synth.triggerAttack(note, Tone.now());
+      setCurrentNote(note);
+    } catch (error) {
+      console.error('Error triggering note:', error);
+    }
+  }, [audioComponents, isAudioInitialized]);
+
+  const handleTouchEnd = useCallback((e, note) => {
+    e.preventDefault();
+    const components = audioComponents.current;
+    if (!isAudioInitialized || note !== currentNote || !components?.synth) return;
+
+    try {
+      components.synth.triggerRelease(Tone.now());
+      setCurrentNote(null);
+    } catch (error) {
+      console.error('Error releasing note:', error);
+    }
+  }, [audioComponents, isAudioInitialized, currentNote]);
 
   useEffect(() => {
     if (!isAudioInitialized) return;
+    
+    const components = audioComponents.current;
+    let activeNote = null;
 
     const handleKeyDown = async (e) => {
       if (e.repeat) return;
-      console.log('Key down:', e.key); // Debug log
 
       // Handle octave switching
-      if (e.key === 'z') {
-        setOctaveOffset(prev => Math.max(prev - 1, -2)); // Limit to 2 octaves down
-        return;
-      }
-      if (e.key === 'x') {
-        setOctaveOffset(prev => Math.min(prev + 1, 2)); // Limit to 2 octaves up
+      if (e.key === 'z' || e.key === 'x') {
+        setOctaveOffset(prev => e.key === 'z' ? Math.max(prev - 1, -2) : Math.min(prev + 1, 2));
         return;
       }
 
@@ -55,24 +79,23 @@ const KeyboardHandler = () => {
       if (!baseNote) return;
 
       const note = adjustNoteForOctave(baseNote);
-      if (currentNote === note) return;
+      if (activeNote === note) return;
 
       try {
-        const { synth, subOsc } = audioComponents.current;
-        if (!synth || !subOsc) {
+        if (!components?.synth || !components?.subOsc) {
           console.error('Synth or SubOsc not initialized');
           return;
         }
 
-        if (currentNote) {
-          await synth.triggerRelease();
+        if (activeNote) {
+          await components.synth.triggerRelease();
         }
 
         const subFreq = getSubFrequency(note);
-        subOsc.frequency.setValueAtTime(subFreq, Tone.now());
-        console.log('Triggering note:', note); // Debug log
-        await synth.triggerAttack(note, Tone.now());
+        components.subOsc.frequency.setValueAtTime(subFreq, Tone.now());
+        await components.synth.triggerAttack(note, Tone.now());
         
+        activeNote = note;
         setCurrentNote(note);
       } catch (error) {
         console.error('Error triggering note:', error);
@@ -80,26 +103,22 @@ const KeyboardHandler = () => {
     };
 
     const handleKeyUp = (e) => {
-      console.log('Key up:', e.key); // Debug log
-
-      // Don't handle octave switch keys
       if (e.key === 'z' || e.key === 'x') return;
 
       const baseNote = keyboardMap[e.key.toLowerCase()];
       if (!baseNote) return;
 
       const note = adjustNoteForOctave(baseNote);
-      if (note !== currentNote) return;
+      if (note !== activeNote) return;
 
       try {
-        const { synth } = audioComponents.current;
-        if (!synth) {
+        if (!components?.synth) {
           console.error('Synth not initialized');
           return;
         }
 
-        console.log('Releasing note:', note); // Debug log
-        synth.triggerRelease(Tone.now());
+        components.synth.triggerRelease(Tone.now());
+        activeNote = null;
         setCurrentNote(null);
       } catch (error) {
         console.error('Error releasing note:', error);
@@ -112,15 +131,13 @@ const KeyboardHandler = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
-
-      const { synth } = audioComponents.current;
-      if (synth && currentNote) {
-        synth.triggerRelease();
+      if (components?.synth && activeNote) {
+        components.synth.triggerRelease();
       }
     };
-  }, [currentNote, audioComponents, isAudioInitialized, keyboardMap, octaveOffset]);
+  }, [isAudioInitialized, keyboardMap, adjustNoteForOctave, getSubFrequency, audioComponents]);
 
-  const renderKeyboard = () => {
+  const renderKeyboard = useCallback(() => {
     const keys = Object.entries(keyboardMap).map(([key, baseNote]) => {
       const note = adjustNoteForOctave(baseNote);
       return {
@@ -130,52 +147,6 @@ const KeyboardHandler = () => {
       };
     });
 
-    const handleTouchStart = (e, note) => {
-      e.preventDefault(); // Prevent double-firing on mobile
-      if (!isAudioInitialized) return;
-      
-      try {
-        const { synth } = audioComponents.current;
-        if (!synth) {
-          console.error('Synth not initialized');
-          return;
-        }
-
-        synth.triggerAttack(note, Tone.now());
-        setCurrentNote(note);
-      } catch (error) {
-        console.error('Error triggering note:', error);
-      }
-    };
-
-    const handleTouchEnd = (e, note) => {
-      e.preventDefault();
-      if (!isAudioInitialized || note !== currentNote) return;
-
-      try {
-        const { synth } = audioComponents.current;
-        if (!synth) {
-          console.error('Synth not initialized');
-          return;
-        }
-
-        synth.triggerRelease(Tone.now());
-        setCurrentNote(null);
-      } catch (error) {
-        console.error('Error releasing note:', error);
-      }
-    };
-
-    const handleMouseDown = (e, note) => {
-      e.preventDefault();
-      handleTouchStart(e, note);
-    };
-
-    const handleMouseUp = (e, note) => {
-      e.preventDefault();
-      handleTouchEnd(e, note);
-    };
-
     return (
       <div className="keyboard-display">
         {keys.map((key) => (
@@ -184,16 +155,16 @@ const KeyboardHandler = () => {
             className={`key ${key.type} ${currentNote === key.note ? 'active' : ''}`}
             onTouchStart={(e) => handleTouchStart(e, key.note)}
             onTouchEnd={(e) => handleTouchEnd(e, key.note)}
-            onMouseDown={(e) => handleMouseDown(e, key.note)}
-            onMouseUp={(e) => handleMouseUp(e, key.note)}
-            onMouseLeave={(e) => handleMouseUp(e, key.note)}
+            onMouseDown={(e) => handleTouchStart(e, key.note)}
+            onMouseUp={(e) => handleTouchEnd(e, key.note)}
+            onMouseLeave={(e) => handleTouchEnd(e, key.note)}
           >
             {key.key}
           </div>
         ))}
       </div>
     );
-  };
+  }, [keyboardMap, adjustNoteForOctave, currentNote, handleTouchStart, handleTouchEnd]);
 
   return (
     <div className="keyboard-container">

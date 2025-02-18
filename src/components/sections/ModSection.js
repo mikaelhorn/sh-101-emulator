@@ -11,7 +11,6 @@ const ModSection = () => {
     setVcoModAmount,
     vcfModAmount,
     setVcfModAmount,
-    formatValue,
   } = useContext(AudioContext);
 
   return (
@@ -29,7 +28,6 @@ const ModSection = () => {
         </div>
         <div className="control-item">
           <label>RATE</label>
-          {/* <div className="value-display">{formatValue(lfoFrequency, 'frequency')}</div> */}
           <div className="slider-wrapper">
             <input
               type="range"
@@ -43,7 +41,6 @@ const ModSection = () => {
         </div>
         <div className="control-item">
           <label>VCO MOD</label>
-          {/* <div className="value-display">{formatValue(vcoModAmount, 'percentage')}</div> */}
           <div className="slider-wrapper">
             <input
               type="range"
@@ -57,7 +54,6 @@ const ModSection = () => {
         </div>
         <div className="control-item">
           <label>VCF MOD</label>
-          {/* <div className="value-display">{formatValue(vcfModAmount, 'percentage')}</div> */}
           <div className="slider-wrapper">
             <input
               type="range"

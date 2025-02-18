@@ -5,7 +5,6 @@ const PitchSection = () => {
   const {
     portamento, setPortamento,
     transpose, setTranspose,
-    formatValue,
   } = useContext(AudioContext);
 
   return (
@@ -24,8 +23,6 @@ const PitchSection = () => {
               onChange={(e) => setPortamento(e.target.value)}
             />
           </div>
-          {/* <div className="value-display">{formatValue(portamento, 'time')}</div> */}
-
         </div>
         <div className="control-item">
           <label>TRANSPOSE</label>
@@ -39,8 +36,6 @@ const PitchSection = () => {
               onChange={(e) => setTranspose(parseInt(e.target.value))}
             />
           </div>
-          {/* <div className="value-display">{transpose > 0 ? `+${transpose}` : transpose}</div> */}
-
         </div>
       </div>
     </div>

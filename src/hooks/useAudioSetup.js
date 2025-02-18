@@ -225,7 +225,15 @@ export const useAudioSetup = () => {
       console.error('Error setting up audio components:', error);
     }
 
-  }, [isAudioInitialized]); // Only re-run on initialization change
+  }, [
+    attack, decay, delayFeedback, delayMix, delayTime,
+    filterCutoff, filterEnvAmount, filterResonance,
+    lfoFrequency, lfoWaveform, mainOscLevel, masterVolume,
+    noiseLevel, pitchShift, pulseWidth, release,
+    reverbDecay, reverbMix, reverbPreDelay, subOscLevel,
+    sustain, vcfModAmount, vcoModAmount, waveform,
+    audioComponents, isAudioInitialized
+  ]);
 
   // Separate effect for parameter updates
   useEffect(() => {
@@ -282,9 +290,27 @@ export const useAudioSetup = () => {
       console.error('Error updating audio parameters:', error);
     }
   }, [
-    isAudioInitialized, masterVolume, waveform, pulseWidth, mainOscLevel, attack, decay, sustain, release,
-    filterCutoff, filterResonance, filterEnvAmount, vcoModAmount, vcfModAmount,
-    noiseLevel, subOscLevel, reverbDecay, reverbPreDelay, reverbMix
+    audioComponents,
+    portamento,
+    isAudioInitialized,
+    attack,
+    decay,
+    sustain,
+    release,
+    waveform,
+    pulseWidth,
+    mainOscLevel,
+    filterCutoff,
+    filterResonance,
+    filterEnvAmount,
+    noiseLevel,
+    subOscLevel,
+    reverbDecay,
+    reverbPreDelay,
+    reverbMix,
+    vcoModAmount,
+    vcfModAmount,
+    masterVolume  // Add masterVolume to the dependency array
   ]);
 
   // Update delay parameters
@@ -301,7 +327,14 @@ export const useAudioSetup = () => {
     } catch (error) {
       console.error('Error updating delay parameters:', error);
     }
-  }, [isAudioInitialized, delayTime, delayFeedback, delayMix, pitchShift]);
+  }, [
+    audioComponents,
+    isAudioInitialized,
+    delayTime,
+    delayFeedback,
+    delayMix,
+    pitchShift
+  ]);
 
   return null;
 };
