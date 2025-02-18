@@ -22,7 +22,7 @@ const SH101Emulator = () => {
     <div className="sh101-emulator">
       <TabSection />
       <div className="bottom-section">
-      {/* <Visualizer /> */}
+      <Visualizer />
         <KeyboardHandler />
       </div>
     </div>
