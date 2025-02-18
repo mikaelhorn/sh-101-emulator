@@ -33,6 +33,7 @@ export const useAudioSetup = () => {
     reverbMix,
   } = useContext(AudioContext);
 
+  // Initial setup effect (keep existing setup code)
   useEffect(() => {
     if (!isAudioInitialized) return;
     
@@ -235,105 +236,97 @@ export const useAudioSetup = () => {
     audioComponents, isAudioInitialized
   ]);
 
-  // Separate effect for parameter updates
+  // Single effect for all parameter updates
   useEffect(() => {
     if (!isAudioInitialized) return;
     const components = audioComponents.current;
-    if (!components.synth) return;
+    if (!components?.synth) return;
 
-    // Update all parameters
     try {
-      components.masterGain.gain.value = masterVolume;
-      components.synth.set({
-        oscillator: { type: waveform === 'pulse' ? 'pulse' : waveform, width: pulseWidth },
-        envelope: { attack, decay, sustain: sustain * 0.8, release },
-        portamento,
-        volume: Math.min(-6, mainOscLevel) // Added volume limiting
+      const now = Tone.now();
+      const rampTime = 0.016; // One frame at 60fps
+
+      // Update synth settings with separate .set calls to avoid interruption
+      components.synth.oscillator.set({
+        type: waveform === 'pulse' ? 'pulse' : waveform,
+        width: pulseWidth
       });
-      components.filter.frequency.value = filterCutoff;
-      components.filter.Q.value = filterResonance;
-      
-      // Dynamically adjust filter behavior based on envelope amount
-      const baseFreq = filterEnvAmount > 0 ? Math.min(filterCutoff, 2000) : filterCutoff;
-      components.filter.frequency.value = baseFreq;
-      
-      // Update filter envelope parameters
-      components.filterEnv.attack = attack;
-      components.filterEnv.decay = decay;
-      components.filterEnv.sustain = sustain;
-      components.filterEnv.release = release;
-      
-      components.filterEnvScale.gain.value = filterEnvAmount * 10000;
-      components.vcoModScale.gain.value = vcoModAmount * 50;
-      components.vcfModScale.gain.value = vcfModAmount * 5000;
-      if (components.noise) components.noise.volume.value = Math.min(0.4, noiseLevel);
-      if (components.subOsc) components.subOsc.volume.value = Math.min(0.4, subOscLevel);
-      if (components.reverb) {
-        components.reverb.decay = reverbDecay;
-        components.reverb.preDelay = reverbPreDelay;
-        components.reverb.wet.value = reverbMix;
+
+      components.synth.envelope.set({
+        attack,
+        decay,
+        sustain: sustain * 0.8,
+        release
+      });
+
+      components.synth.portamento = portamento;
+
+      // Smoothly update continuous parameters
+      if (components.filter) {
+        components.filter.frequency.cancelScheduledValues(now);
+        components.filter.frequency.linearRampToValueAtTime(filterCutoff, now + rampTime);
+        components.filter.Q.cancelScheduledValues(now);
+        components.filter.Q.linearRampToValueAtTime(filterResonance, now + rampTime);
       }
 
-      // Update sub oscillator
-      if (components.subOsc && components.subGain) {
-        components.subOsc.volume.value = Math.min(0.4, subOscLevel);
-        components.subGain.gain.value = Math.min(0.4, subOscLevel);
+      if (components.masterGain) {
+        components.masterGain.gain.cancelScheduledValues(now);
+        components.masterGain.gain.linearRampToValueAtTime(masterVolume, now + rampTime);
       }
 
-      // Update noise
-      if (components.noise && components.noiseGain) {
+      // Update modulation amounts
+      if (components.vcoModScale) {
+        components.vcoModScale.gain.cancelScheduledValues(now);
+        components.vcoModScale.gain.linearRampToValueAtTime(vcoModAmount * 50, now + rampTime);
+      }
+
+      if (components.vcfModScale) {
+        components.vcfModScale.gain.cancelScheduledValues(now);
+        components.vcfModScale.gain.linearRampToValueAtTime(vcfModAmount * 5000, now + rampTime);
+      }
+
+      // Update other parameters
+      if (components.noise) {
         components.noise.volume.value = Math.min(0.4, noiseLevel);
-        components.noiseGain.gain.value = Math.min(0.4, noiseLevel);
+      }
+
+      if (components.subOsc) {
+        components.subOsc.volume.value = Math.min(0.4, subOscLevel);
+      }
+
+      // Update effects
+      if (components.delay) {
+        components.delay.delayTime.value = delayTime;
+        components.delay.feedback.value = delayFeedback;
+      }
+
+      if (components.delayMix) {
+        components.delayMix.fade.value = delayMix;
       }
 
     } catch (error) {
-      console.error('Error updating audio parameters:', error);
+      console.error('Error updating parameters:', error);
     }
   }, [
-    audioComponents,
-    portamento,
     isAudioInitialized,
+    waveform,
+    pulseWidth,
     attack,
     decay,
     sustain,
     release,
-    waveform,
-    pulseWidth,
-    mainOscLevel,
+    portamento,
     filterCutoff,
     filterResonance,
-    filterEnvAmount,
-    noiseLevel,
-    subOscLevel,
-    reverbDecay,
-    reverbPreDelay,
-    reverbMix,
+    masterVolume,
     vcoModAmount,
     vcfModAmount,
-    masterVolume  // Add masterVolume to the dependency array
-  ]);
-
-  // Update delay parameters
-  useEffect(() => {
-    if (!isAudioInitialized) return;
-    const { delay, delayMix: delayMixer, pitchShift: shifter } = audioComponents.current;
-    if (!delay || !delayMixer || !shifter) return;
-
-    try {
-      delay.delayTime.value = delayTime;
-      delay.feedback.value = delayFeedback;
-      delayMixer.fade.value = delayMix;
-      shifter.pitch = pitchShift;
-    } catch (error) {
-      console.error('Error updating delay parameters:', error);
-    }
-  }, [
-    audioComponents,
-    isAudioInitialized,
+    noiseLevel,
+    subOscLevel,
     delayTime,
     delayFeedback,
     delayMix,
-    pitchShift
+    audioComponents  // Add audioComponents to dependency array
   ]);
 
   return null;
