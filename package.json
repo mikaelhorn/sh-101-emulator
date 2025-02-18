@@ -2,7 +2,7 @@
   "name": "sh-101-emulator",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://mikaelhornaeus.github.io/sh-101-emulator",
+  "homepage": "https://mikaelhorn.github.io/sh-101-emulator/",
   "dependencies": {
     "@testing-library/dom": "^8.20.1",
     "@testing-library/jest-dom": "^5.16.5",
