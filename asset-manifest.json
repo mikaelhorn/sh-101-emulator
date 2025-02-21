@@ -1,12 +1,12 @@
 {
   "files": {
-    "main.css": "/sh-101-emulator/static/css/main.ede6c5bb.css",
-    "main.js": "/sh-101-emulator/static/js/main.cb954800.js",
+    "main.css": "/sh-101-emulator/static/css/main.614b1ea0.css",
+    "main.js": "/sh-101-emulator/static/js/main.3ef77539.js",
     "static/js/206.4463f527.chunk.js": "/sh-101-emulator/static/js/206.4463f527.chunk.js",
     "index.html": "/sh-101-emulator/index.html"
   },
   "entrypoints": [
-    "static/css/main.ede6c5bb.css",
-    "static/js/main.cb954800.js"
+    "static/css/main.614b1ea0.css",
+    "static/js/main.3ef77539.js"
   ]
 }
