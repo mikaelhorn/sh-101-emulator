@@ -82,8 +82,8 @@ const KeyboardHandler = () => {
       if (activeNote === note) return;
 
       try {
-        if (!components?.synth || !components?.subOsc) {
-          console.error('Synth or SubOsc not initialized');
+        if (!components?.synth) {
+          console.error('Synth not initialized');
           return;
         }
 
@@ -91,8 +91,12 @@ const KeyboardHandler = () => {
           await components.synth.triggerRelease();
         }
 
-        const subFreq = getSubFrequency(note);
-        components.subOsc.frequency.setValueAtTime(subFreq, Tone.now());
+        // Only update subOsc if it exists
+        if (components.subOsc) {
+          const subFreq = getSubFrequency(note);
+          components.subOsc.frequency.setValueAtTime(subFreq, Tone.now());
+        }
+
         await components.synth.triggerAttack(note, Tone.now());
         
         activeNote = note;

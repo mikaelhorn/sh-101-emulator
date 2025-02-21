@@ -1,4 +1,4 @@
-import { useEffect, useContext } from 'react';
+import { useEffect, useContext, useCallback } from 'react';
 import * as Tone from 'tone';
 import { AudioContext } from '../context/AudioContext';
 
@@ -6,6 +6,7 @@ export const useAudioSetup = () => {
   const {
     audioComponents,
     isAudioInitialized,
+    setIsAudioInitialized,
     masterVolume,
     waveform,
     pulseWidth,
@@ -14,7 +15,6 @@ export const useAudioSetup = () => {
     decay,
     sustain,
     release,
-    portamento,
     filterCutoff,
     filterResonance,
     lfoWaveform,
@@ -24,317 +24,396 @@ export const useAudioSetup = () => {
     noiseLevel,
     subOscLevel,
     filterEnvAmount,
+    sequence,
+    currentStep,
+    setCurrentStep,
+    isPlaying,
+    tempo,
+    swing,
+    setIsPlaying,
     delayTime,
-    delayFeedback,
     delayMix,
-    pitchShift,
-    reverbPreDelay,
-    reverbDecay,
-    reverbMix,
+    delayFeedback,
+    pitchShift
   } = useContext(AudioContext);
 
+  const createAudioNode = useCallback(async (createFn) => {
+    try {
+      const node = await createFn();
+      await new Promise(resolve => setTimeout(resolve, 10));
+      return node;
+    } catch (error) {
+      console.error('Error creating audio node:', error);
+      throw error;
+    }
+  }, []);
+
+  // Initial audio setup effect - only run once when initialized
   useEffect(() => {
     if (!isAudioInitialized) return;
-    
-    // Ensure we have a running context
-    const context = Tone.getContext();
-    if (context.state !== 'running') {
-      console.log('Audio context not running, attempting to resume...');
-      context.resume();
-      return;
-    }
+    let isComponentMounted = true;
 
-    const setupAudioComponents = () => {
-      // Clean up any existing components
-      Object.values(audioComponents.current).forEach(component => {
-        if (component?.dispose) {
-          component.dispose();
+    const setupAudioComponents = async () => {
+      try {
+        const context = Tone.getContext();
+        if (context.state !== 'running') {
+          await context.resume();
+          if (context.state !== 'running') {
+            throw new Error('Audio context not running');
+          }
         }
-      });
 
-      const components = audioComponents.current;
-      
-      // Create components in reverse order (from output to input)
-      components.masterGain = new Tone.Gain(masterVolume);
-      components.masterGain.toDestination();
-      
-      components.reverb = new Tone.Reverb({
-        decay: reverbDecay,
-        preDelay: reverbPreDelay,
-        wet: reverbMix
-      });
-      components.reverb.connect(components.masterGain);
+        if (!isComponentMounted) return;
 
-      // Create pitch shifter
-      components.pitchShift = new Tone.PitchShift({
-        pitch: pitchShift,
-        windowSize: 0.1,
-        delayTime: 0
-      });
-      components.pitchShift.connect(components.reverb);
+        // Clean up existing components
+        Object.values(audioComponents.current).forEach(component => {
+          if (component?.dispose) {
+            try {
+              component.disconnect();
+              component.dispose();
+            } catch (e) {
+              console.warn('Cleanup warning:', e);
+            }
+          }
+        });
 
-      // Create tape delay effect
-      components.delay = new Tone.FeedbackDelay({
-        delayTime: delayTime,
-        feedback: delayFeedback,
-        wet: delayMix
-      });
-      components.delay.connect(components.pitchShift);
+        audioComponents.current = {};
+        const components = audioComponents.current;
 
-      // Create the dry/wet mixer for delay
-      components.delayMix = new Tone.CrossFade(delayMix);
-      components.delayMix.connect(components.pitchShift);
-      
-      // Connect delay to wet side of mixer
-      components.delay.connect(components.delayMix.b);
+        // Create components with initial values
+        components.masterGain = await createAudioNode(() => 
+          new Tone.Gain(masterVolume).toDestination()
+        );
 
-      components.filter = new Tone.Filter({
-        type: 'lowpass',
-        frequency: filterCutoff,
-        Q: filterResonance,
-        rolloff: -24
-      });
-      
-      // Set a lower base frequency for the filter when envelope amount is high
-      const baseFreq = filterEnvAmount > 0 ? Math.min(filterCutoff, 2000) : filterCutoff;
-      components.filter.frequency.value = baseFreq;
+        components.tapeDelay = await createAudioNode(() =>
+          new Tone.FeedbackDelay({
+            delayTime,
+            feedback: delayFeedback,
+            wet: delayMix
+          })
+        );
+        components.tapeDelay.connect(components.masterGain);
 
-      // Connect filter to both dry path and delay
-      components.filter.connect(components.delayMix.a);
-      components.filter.connect(components.delay);
+        if (pitchShift !== 0) {
+          components.pitchShift = await createAudioNode(() =>
+            new Tone.PitchShift({
+              pitch: pitchShift,
+              windowSize: 0.1
+            })
+          );
+          components.pitchShift.connect(components.masterGain);
+        }
 
-      // Create mixer with significantly reduced gain to prevent clipping
-      components.mixer = new Tone.Gain(0.2); // Reduced from 0.5 to 0.2
-      components.mixer.connect(components.filter);
-      
-      // Source gains with proper scaling and reduced levels
-      components.mainGain = new Tone.Gain(Math.min(0.6, mainOscLevel)); // Reduced from 0.8 to 0.6
-      components.mainGain.connect(components.mixer);
-      
-      components.subGain = new Tone.Gain(Math.min(0.4, subOscLevel)); // Reduced from 0.6 to 0.4
-      components.subGain.connect(components.mixer);
-      
-      components.noiseGain = new Tone.Gain(Math.min(0.4, noiseLevel)); // Added gain limiting
-      components.noiseGain.connect(components.mixer);
+        components.synth = await createAudioNode(() =>
+          new Tone.MonoSynth({
+            oscillator: {
+              type: waveform === 'pulse' ? 'pulse' : waveform,
+              width: pulseWidth
+            },
+            envelope: {
+              attack,
+              decay,
+              sustain,
+              release
+            },
+            filter: {
+              type: "lowpass",
+              frequency: filterCutoff,
+              rolloff: -24,
+              Q: filterResonance
+            },
+            filterEnvelope: {
+              attack,
+              decay,
+              sustain,
+              release,
+              baseFrequency: filterCutoff,
+              octaves: filterEnvAmount * 7,
+              exponent: 2
+            }
+          })
+        );
 
-      // Create synth with proper envelope settings and reduced volume
-      components.synth = new Tone.MonoSynth({
-        oscillator: {
-          type: waveform === 'pulse' ? 'pulse' : waveform,
-          width: pulseWidth
-        },
-        envelope: {
-          attack: attack,
-          decay: decay,
-          sustain: sustain,
-          release: release,
-          attackCurve: 'linear',
-          releaseCurve: 'exponential'
-        },
-        filter: {
-          Q: 0,
-          type: "lowpass",
-          rolloff: -24
-        },
-        filterEnvelope: {
-          attack: attack,
-          decay: decay,
-          sustain: sustain,
-          release: release,
-          baseFrequency: 200,
-          octaves: 7,
-          attackCurve: 'linear',
-          releaseCurve: 'exponential'
-        },
-        portamento: 0,
-        volume: Math.min(-6, mainOscLevel) // Added volume limiting
-      }).connect(components.mainGain);
+        // Connect synth through effects chain
+        if (components.pitchShift) {
+          components.synth.disconnect();
+          components.synth.connect(components.tapeDelay);
+          components.tapeDelay.connect(components.pitchShift);
+          components.pitchShift.connect(components.masterGain);
+        } else {
+          components.synth.disconnect();
+          components.synth.connect(components.tapeDelay);
+          components.tapeDelay.connect(components.masterGain);
+        }
 
-      // Create filter envelope that matches the amplitude envelope
-      components.filterEnv = new Tone.Envelope({
-        attack,
-        decay,
-        sustain,
-        release,
-        releaseCurve: 'exponential'
-      });
+        // Set up sub oscillator if needed
+        if (subOscLevel > -60) {
+          components.subOsc = await createAudioNode(() =>
+            new Tone.Oscillator({
+              type: waveform === 'pulse' ? 'pulse' : waveform,
+              volume: subOscLevel
+            })
+          );
+          components.subOsc.connect(components.masterGain);
+          components.subOsc.start();
+        }
 
-      // Increase filter envelope scaling for more dramatic effect
-      components.filterEnvScale = new Tone.Gain(filterEnvAmount * 10000); // Increased from 5000 to 10000
-      components.filterEnv.connect(components.filterEnvScale);
-      components.filterEnvScale.connect(components.filter.frequency);
+        // Set up noise if needed
+        if (noiseLevel > -60) {
+          components.noise = await createAudioNode(() =>
+            new Tone.Noise({
+              type: 'white',
+              volume: noiseLevel
+            })
+          );
+          components.noise.connect(components.masterGain);
+          components.noise.start();
+        }
 
-      // Create LFO
-      components.lfo = new Tone.LFO({
-        type: lfoWaveform,
-        frequency: lfoFrequency,
-        amplitude: 1
-      });
+        // Set up LFO if needed
+        if (vcoModAmount > 0 || vcfModAmount > 0) {
+          components.lfo = await createAudioNode(() =>
+            new Tone.LFO({
+              type: lfoWaveform,
+              frequency: lfoFrequency,
+              min: -1,
+              max: 1
+            })
+          );
 
-      components.vcoModScale = new Tone.Gain(vcoModAmount * 50);
-      components.vcfModScale = new Tone.Gain(vcfModAmount * 5000);
-      
-      components.lfo.connect(components.vcoModScale);
-      components.lfo.connect(components.vcfModScale);
-      components.vcoModScale.connect(components.synth.frequency);
-      components.vcfModScale.connect(components.filter.frequency);
+          if (vcoModAmount > 0) {
+            const vcoScale = await createAudioNode(() => new Tone.Gain(vcoModAmount * 100));
+            components.lfo.connect(vcoScale);
+            vcoScale.connect(components.synth.detune);
+          }
 
-      // Create sub oscillator
-      components.subOsc = new Tone.Oscillator({
-        type: 'square',
-        volume: subOscLevel
-      }).connect(components.mixer);
+          if (vcfModAmount > 0) {
+            const vcfScale = await createAudioNode(() => new Tone.Gain(vcfModAmount * 2000));
+            components.lfo.connect(vcfScale);
+            vcfScale.connect(components.synth.filter.frequency);
+          }
 
-      // Create noise
-      components.noise = new Tone.Noise({
-        type: 'white',
-        volume: noiseLevel
-      });
-      components.noise.connect(components.mixer);
+          components.lfo.start();
+        }
 
-      // Start continuous components
-      components.lfo.start();
-      components.subOsc.start();
-      if (noiseLevel > -60) {
-        components.noise.start();
+        await Tone.loaded();
+        console.log('Audio components setup complete');
+
+      } catch (error) {
+        console.error('Error in audio setup:', error);
+        if (isComponentMounted) {
+          Object.values(audioComponents.current).forEach(component => {
+            if (component?.dispose) {
+              try {
+                component.disconnect();
+                component.dispose();
+              } catch (e) {
+                console.warn('Cleanup warning:', e);
+              }
+            }
+          });
+          audioComponents.current = {};
+          setIsAudioInitialized(false);
+        }
       }
-
-      // Set up note triggering with proper timing
-      const originalTriggerAttack = components.synth.triggerAttack;
-      const originalTriggerRelease = components.synth.triggerRelease;
-
-      components.synth.triggerAttack = (note, time) => {
-        const now = time || Tone.now();
-        components.subOsc.frequency.setValueAtTime(Tone.Frequency(note).toFrequency() / 2, now);
-        components.filterEnv.triggerAttack(now); // Explicitly trigger filter envelope
-        return originalTriggerAttack.call(components.synth, note, now);
-      };
-
-      components.synth.triggerRelease = (time) => {
-        const now = time || Tone.now();
-        components.filterEnv.triggerRelease(now);
-        return originalTriggerRelease.call(components.synth, now);
-      };
-
-      console.log('Audio components setup complete');
     };
 
-    try {
-      setupAudioComponents();
-    } catch (error) {
-      console.error('Error setting up audio components:', error);
-    }
+    setupAudioComponents();
 
-  }, [
-    attack, decay, delayFeedback, delayMix, delayTime,
-    filterCutoff, filterEnvAmount, filterResonance,
-    lfoFrequency, lfoWaveform, mainOscLevel, masterVolume,
-    noiseLevel, pitchShift, pulseWidth, release,
-    reverbDecay, reverbMix, reverbPreDelay, subOscLevel,
-    sustain, vcfModAmount, vcoModAmount, waveform,
-    audioComponents, isAudioInitialized
-  ]);
-
-  // Separate effect for parameter updates
-  useEffect(() => {
-    if (!isAudioInitialized) return;
-    const components = audioComponents.current;
-    if (!components.synth) return;
-
-    // Update all parameters
-    try {
-      components.masterGain.gain.value = masterVolume;
-      components.synth.set({
-        oscillator: { type: waveform === 'pulse' ? 'pulse' : waveform, width: pulseWidth },
-        envelope: { attack, decay, sustain: sustain * 0.8, release },
-        portamento,
-        volume: Math.min(-6, mainOscLevel) // Added volume limiting
+    return () => {
+      isComponentMounted = false;
+      Tone.Transport.stop();
+      Tone.Transport.cancel(0);
+      Object.values(audioComponents.current).forEach(component => {
+        if (component?.dispose) {
+          try {
+            component.disconnect();
+            component.dispose();
+          } catch (e) {
+            console.warn('Cleanup warning:', e);
+          }
+        }
       });
-      components.filter.frequency.value = filterCutoff;
-      components.filter.Q.value = filterResonance;
-      
-      // Dynamically adjust filter behavior based on envelope amount
-      const baseFreq = filterEnvAmount > 0 ? Math.min(filterCutoff, 2000) : filterCutoff;
-      components.filter.frequency.value = baseFreq;
-      
-      // Update filter envelope parameters
-      components.filterEnv.attack = attack;
-      components.filterEnv.decay = decay;
-      components.filterEnv.sustain = sustain;
-      components.filterEnv.release = release;
-      
-      components.filterEnvScale.gain.value = filterEnvAmount * 10000;
-      components.vcoModScale.gain.value = vcoModAmount * 50;
-      components.vcfModScale.gain.value = vcfModAmount * 5000;
-      if (components.noise) components.noise.volume.value = Math.min(0.4, noiseLevel);
-      if (components.subOsc) components.subOsc.volume.value = Math.min(0.4, subOscLevel);
-      if (components.reverb) {
-        components.reverb.decay = reverbDecay;
-        components.reverb.preDelay = reverbPreDelay;
-        components.reverb.wet.value = reverbMix;
-      }
+      audioComponents.current = {};
+    };
+  }, [isAudioInitialized]); // Only depend on isAudioInitialized
 
-      // Update sub oscillator
-      if (components.subOsc && components.subGain) {
-        components.subOsc.volume.value = Math.min(0.4, subOscLevel);
-        components.subGain.gain.value = Math.min(0.4, subOscLevel);
-      }
+  // Separate effects for real-time parameter updates
+  useEffect(() => {
+    const components = audioComponents.current;
+    if (!components?.synth) return;
 
-      // Update noise
-      if (components.noise && components.noiseGain) {
-        components.noise.volume.value = Math.min(0.4, noiseLevel);
-        components.noiseGain.gain.value = Math.min(0.4, noiseLevel);
+    // Update synth parameters in real-time
+    components.synth.set({
+      oscillator: {
+        type: waveform === 'pulse' ? 'pulse' : waveform,
+        width: pulseWidth
       }
-
-    } catch (error) {
-      console.error('Error updating audio parameters:', error);
+    });
+    
+    if (components.subOsc) {
+      components.subOsc.type = waveform === 'pulse' ? 'pulse' : waveform;
     }
-  }, [
-    audioComponents,
-    portamento,
-    isAudioInitialized,
-    attack,
-    decay,
-    sustain,
-    release,
-    waveform,
-    pulseWidth,
-    mainOscLevel,
-    filterCutoff,
-    filterResonance,
-    filterEnvAmount,
-    noiseLevel,
-    subOscLevel,
-    reverbDecay,
-    reverbPreDelay,
-    reverbMix,
-    vcoModAmount,
-    vcfModAmount,
-    masterVolume  // Add masterVolume to the dependency array
-  ]);
+  }, [waveform, pulseWidth]);
 
-  // Update delay parameters
+  useEffect(() => {
+    const components = audioComponents.current;
+    if (!components?.synth) return;
+
+    components.synth.envelope.set({
+      attack,
+      decay,
+      sustain,
+      release
+    });
+
+    components.synth.filterEnvelope.set({
+      attack,
+      decay,
+      sustain,
+      release
+    });
+  }, [attack, decay, sustain, release]);
+
+  useEffect(() => {
+    const components = audioComponents.current;
+    if (!components?.synth) return;
+
+    components.synth.filter.set({
+      frequency: filterCutoff,
+      Q: filterResonance
+    });
+
+    components.synth.filterEnvelope.set({
+      baseFrequency: filterCutoff,
+      octaves: filterEnvAmount * 7
+    });
+  }, [filterCutoff, filterResonance, filterEnvAmount]);
+
+  useEffect(() => {
+    const components = audioComponents.current;
+    if (!components?.lfo) return;
+
+    components.lfo.set({
+      type: lfoWaveform,
+      frequency: lfoFrequency
+    });
+  }, [lfoWaveform, lfoFrequency]);
+
+  useEffect(() => {
+    const components = audioComponents.current;
+    if (!components?.masterGain) return;
+    components.masterGain.gain.rampTo(masterVolume, 0.1);
+  }, [masterVolume]);
+
+  useEffect(() => {
+    const components = audioComponents.current;
+    if (!components?.synth) return;
+    components.synth.volume.rampTo(mainOscLevel, 0.1);
+  }, [mainOscLevel]);
+
+  useEffect(() => {
+    const components = audioComponents.current;
+    if (!components?.subOsc) return;
+    components.subOsc.volume.rampTo(subOscLevel, 0.1);
+  }, [subOscLevel]);
+
+  useEffect(() => {
+    const components = audioComponents.current;
+    if (!components?.noise) return;
+    components.noise.volume.rampTo(noiseLevel, 0.1);
+  }, [noiseLevel]);
+
+  // Effect controls
+  useEffect(() => {
+    const components = audioComponents.current;
+    if (!components?.tapeDelay) return;
+
+    components.tapeDelay.delayTime.rampTo(delayTime, 0.1);
+    components.tapeDelay.feedback.rampTo(delayFeedback, 0.1);
+    components.tapeDelay.wet.rampTo(delayMix, 0.1);
+  }, [delayTime, delayFeedback, delayMix]);
+
+  useEffect(() => {
+    const components = audioComponents.current;
+    if (!components?.pitchShift) return;
+    components.pitchShift.pitch = pitchShift;
+  }, [pitchShift]);
+
+  // Transport controls
   useEffect(() => {
     if (!isAudioInitialized) return;
-    const { delay, delayMix: delayMixer, pitchShift: shifter } = audioComponents.current;
-    if (!delay || !delayMixer || !shifter) return;
+    Tone.Transport.bpm.value = tempo;
+  }, [isAudioInitialized, tempo]);
+
+  useEffect(() => {
+    if (!isAudioInitialized) return;
+    Tone.Transport.swing = swing;
+  }, [isAudioInitialized, swing]);
+
+  // Sequencer effect
+  useEffect(() => {
+    if (!isAudioInitialized || !isPlaying) return;
+
+    const components = audioComponents.current;
+    if (!components?.synth) return;
+
+    if (components.sequenceEvent) {
+      components.sequenceEvent.dispose();
+    }
 
     try {
-      delay.delayTime.value = delayTime;
-      delay.feedback.value = delayFeedback;
-      delayMixer.fade.value = delayMix;
-      shifter.pitch = pitchShift;
+      components.sequenceEvent = new Tone.Sequence(
+        (time, step) => {
+          Tone.Draw.schedule(() => {
+            setCurrentStep(step);
+          }, time);
+
+          if (!sequence) return;
+          Object.entries(sequence).forEach(([noteKey, steps]) => {
+            if (!steps?.[step]) return;
+
+            const isHighOctave = noteKey.endsWith('_high');
+            const baseNote = isHighOctave ? noteKey.replace('_high', '') : noteKey;
+            const note = isHighOctave ? Tone.Frequency(baseNote).transpose(12) : baseNote;
+
+            components.synth.triggerAttackRelease(note, '32n', time);
+
+            if (components.subOsc) {
+              const subFreq = Tone.Frequency(note).transpose(-12).toFrequency();
+              components.subOsc.frequency.setValueAtTime(subFreq, time);
+            }
+          });
+        },
+        Array.from({ length: 16 }, (_, i) => i),
+        '16n'
+      ).start(0);
+
     } catch (error) {
-      console.error('Error updating delay parameters:', error);
+      console.error('Error setting up sequence:', error);
+      setIsPlaying(false);
     }
-  }, [
-    audioComponents,
-    isAudioInitialized,
-    delayTime,
-    delayFeedback,
-    delayMix,
-    pitchShift
-  ]);
+
+    return () => {
+      if (components.sequenceEvent) {
+        components.sequenceEvent.dispose();
+        components.sequenceEvent = null;
+      }
+    };
+  }, [isAudioInitialized, isPlaying, sequence, setCurrentStep, setIsPlaying]);
+
+  // Play/Stop control
+  useEffect(() => {
+    const components = audioComponents.current;
+    if (!components?.synth) return;
+    
+    if (isPlaying) {
+      Tone.Transport.start();
+    } else {
+      Tone.Transport.pause();
+      setCurrentStep(-1);
+    }
+  }, [isPlaying, setCurrentStep]);
 
   return null;
 };
